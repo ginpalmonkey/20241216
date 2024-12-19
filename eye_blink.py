@@ -10,7 +10,7 @@ def eye_aspect_ratio(eye):
     return (A + B) / (2.0 * C)
 
 # Detect Eye Blink and State
-def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration_time, calibration_start, calibration_ears, blink_start):
+def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration_time, calibration_start, calibration_ears, blink_start, blink_count, eyes_closed, min_blink_duration=0.15):
     left_eye_idx = [33, 160, 158, 133, 153, 144]
     right_eye_idx = [362, 385, 387, 263, 373, 380]
 
@@ -41,14 +41,27 @@ def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration
                 EAR_THRESH = 0.25
                 print("Calibration Failed: Using Default Threshold = 0.25")
     else:
+        # 눈 감은 상태 인지, 아닌지 판별
         if ear < EAR_THRESH:
-            if blink_start is None:
+            # 눈을 막 감은 순간
+            if not eyes_closed:
+                eyes_closed = True
                 blink_start = time.time()
-            elif time.time() - blink_start >= SLEEP_TIME:
+            # 눈 감은 상태가 일정 시간 지속되면 수면 상태로 변경
+            if eyes_closed and (time.time() - blink_start) >= SLEEP_TIME:
                 current_state = "수면"
             else:
                 current_state = "눈 감음"
         else:
+            # EAR이 다시 임계값 위로 올라온 경우
+            # 이전에 눈이 감겨 있었고, 최소 블링크 시간 이상 감겨 있었다면 깜빡임 카운트 증가
+            if eyes_closed:
+                # 감긴 시간
+                closed_duration = time.time() - blink_start
+                if closed_duration >= min_blink_duration:
+                    blink_count += 1
+            # 상태 초기화
+            eyes_closed = False
             blink_start = None
 
-    return EAR_THRESH, blink_start, current_state, calibration_message
+    return EAR_THRESH, blink_start, blink_count, eyes_closed, current_state, calibration_message

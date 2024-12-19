@@ -22,9 +22,9 @@ def detect_head_turn(facial_landmarks, w, h):
         angle += 360
 
     # Determine head direction
-    if 80 <= angle <= 100:
+    if 55 <= angle <= 125:
         return "정면"
-    elif angle < 80:
+    elif angle < 55:
         return "왼쪽"
     else:
         return "오른쪽"
