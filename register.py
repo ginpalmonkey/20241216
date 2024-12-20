@@ -1,20 +1,34 @@
-import tkinter as tk
-from tkinter import messagebox
 import cv2
 from keras_facenet import FaceNet
 import mediapipe as mp
 import numpy as np
 import requests
+import hashlib
 
 # FaceNet 초기화
 facenet = FaceNet()
 
 # MediaPipe Face Detection 초기화
 mp_face_detection = mp.solutions.face_detection
-mp_drawing = mp.solutions.drawing_utils
 
 # 서버 URL
-SERVER_URL = "http://220.90.180.118:9000"
+SERVER_URL = "http://192.168.0.117:9000"
+
+# 비밀번호 암호화 함수
+def hash_password(password):
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+# 아이디 중복 확인 함수
+def check_user_id_exists(user_id):
+    try:
+        response = requests.get(f"{SERVER_URL}/get-face-vector/{user_id}")
+        if response.status_code == 200:
+            return True  # 아이디가 이미 존재하는 경우
+        else:
+            return False  # 아이디가 존재하지 않는 경우
+    except Exception as e:
+        print(f"Error checking user ID: {e}")
+        return False
 
 # 얼굴 임베딩 생성 함수 (MediaPipe 사용)
 def capture_face_embedding():
@@ -24,7 +38,7 @@ def capture_face_embedding():
 
     embeddings = []
     num_images = 0
-    total_images = 50  # 캡처할 이미지 수
+    total_images = 100  # 캡처할 이미지 수
 
     print("Capturing face images. Press 'q' to stop.")
     with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection:
@@ -56,7 +70,10 @@ def capture_face_embedding():
                     cv2.putText(frame, f"Captured: {num_images}/{total_images}", (10, 30),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-            cv2.imshow("Face Registration", frame)
+            # 얼굴 캡처를 실시간으로 보여주기
+            cv2.imshow("Capturing Face", frame)
+
+            # 'q'를 누르면 캡처 종료
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
@@ -70,44 +87,49 @@ def capture_face_embedding():
 
 # 회원가입 처리 함수
 def register_user():
-    user_id = id_entry.get()
-    password = password_entry.get()
-    name = name_entry.get()
+    # 아이디 중복 체크를 반복하도록 수정
+    while True:
+        user_id = input("Enter User ID: ")
+
+        # 아이디 중복 체크
+        if check_user_id_exists(user_id):
+            print("Error: User ID already exists! Please choose another one.")
+        else:
+            break  # 아이디가 중복되지 않으면 루프 종료
+
+    password = input("Enter Password: ")
+    name = input("Enter Name: ")
 
     if not user_id or not password or not name:
-        messagebox.showerror("Error", "All fields are required!")
+        print("Error: All fields are required!")
         return
 
+    # 얼굴 캡처가 성공적으로 완료되면 그 다음에 비밀번호를 암호화하고 회원가입 요청
     embedding = capture_face_embedding()
     if embedding is None:
-        messagebox.showerror("Error", "Failed to capture face images.")
+        print("Error: Failed to capture face images.")
         return
 
-    data = {"id": user_id, "password": password, "name": name, "embedding": embedding.tolist()}
+    # 비밀번호 암호화
+    hashed_password = hash_password(password)
+
+    # 서버에 회원가입 요청
+    data = {
+        "id": user_id,
+        "password": hashed_password,  # 암호화된 비밀번호
+        "name": name,
+        "embedding": embedding.tolist()
+    }
+
     try:
         response = requests.post(f"{SERVER_URL}/register", json=data)
         if response.status_code == 200:
-            messagebox.showinfo("Success", "Registration completed!")
+            print("Registration completed successfully!")
         else:
-            messagebox.showerror("Error", response.json().get("message", "Failed to register"))
+            print("Error:", response.json().get("message", "Failed to register"))
     except Exception as e:
-        messagebox.showerror("Error", f"An error occurred: {e}")
+        print(f"An error occurred: {e}")
 
-# 회원가입 UI
-app = tk.Tk()
-app.title("Register")
-
-tk.Label(app, text="User ID").grid(row=0, column=0)
-id_entry = tk.Entry(app)
-id_entry.grid(row=0, column=1)
-
-tk.Label(app, text="Password").grid(row=1, column=0)
-password_entry = tk.Entry(app, show="*")
-password_entry.grid(row=1, column=1)
-
-tk.Label(app, text="Name").grid(row=2, column=0)
-name_entry = tk.Entry(app)
-name_entry.grid(row=2, column=1)
-
-tk.Button(app, text="Register", command=register_user).grid(row=3, column=0, columnspan=2)
-app.mainloop()
+# 프로그램 시작
+if __name__ == "__main__":
+    register_user()
