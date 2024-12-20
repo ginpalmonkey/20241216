@@ -2,11 +2,10 @@ import cv2
 import mediapipe as mp
 import time
 
-from calculate import cal_headturn
 from eye_blink import detect_eye_blink
 from head_turn import detect_head_turn
 from draw_utils import draw_text_kor
-from time_measurement import initialize_time_variables, update_sleep_time, update_turn_time  # ### CHANGED ###
+from time_measurement import initialize_time_variables, update_sleep_time, update_turn_time
 from calculate import cal_headturn, cal_sleeptime, cal_blinks_per_minute, cal_blink_points, totalscore
 
 # Initialize Mediapipe Face Mesh
@@ -24,6 +23,10 @@ def main():
     blink_start = None
     blink_count = 0
     eyes_closed = False
+    # 동적 임계값 조정에 필요함
+    ear_values = []
+    calibration_window = 100
+    frames_closed = 0
 
     # Previously, time variables were defined directly here.
     # Now, we initialize them using a separate function.
@@ -53,9 +56,11 @@ def main():
             for facial_landmarks in results.multi_face_landmarks:
                 h, w, _ = frame.shape
 
-                EAR_THRESH, blink_start, blink_count, eyes_closed, current_state, calibration_message = detect_eye_blink(
+                EAR_THRESH, blink_start, blink_count, eyes_closed, current_state, calibration_message, frames_closed = detect_eye_blink(
                     facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, CALIBRATION_TIME,
-                    calibration_start, calibration_ears, blink_start, blink_count, eyes_closed
+                    calibration_start, calibration_ears, blink_start, blink_count, eyes_closed,
+                    ear_values, calibration_window=calibration_window, min_blink_duration=0.15,
+                    frames_closed=frames_closed, frames_required=3
                 )
 
                 head_direction = detect_head_turn(facial_landmarks, w, h)
@@ -83,7 +88,7 @@ def main():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # Final cleanup if sleeping or turning at the end
+    # # 종료 시점에서 수면/고개돌림 종료 처리
     if sleep_start is not None:
         total_sleep_time += (time.time() - sleep_start)
     if turn_start is not None:
@@ -103,8 +108,8 @@ def main():
 
     total = totalscore(sleep_point, ht_point, blink_point)
     print(int(elapsed_time))
-    print(int(total_sleep_time))
-    print(int(total_turn_time))
+    print(f"수면시간 : {int(total_sleep_time)}")
+    print(f"고개돌림 : {int(total_turn_time)}")
     print(f"집중 점수 : {total}")
 
 

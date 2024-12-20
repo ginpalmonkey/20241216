@@ -10,7 +10,9 @@ def eye_aspect_ratio(eye):
     return (A + B) / (2.0 * C)
 
 # Detect Eye Blink and State
-def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration_time, calibration_start, calibration_ears, blink_start, blink_count, eyes_closed, min_blink_duration=0.15):
+def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration_time, calibration_start, calibration_ears,
+    blink_start, blink_count, eyes_closed, ear_values, calibration_window=100, min_blink_duration=0.15,
+    frames_closed=0, frames_required=3):
     left_eye_idx = [33, 160, 158, 133, 153, 144]
     right_eye_idx = [362, 385, 387, 263, 373, 380]
 
@@ -41,8 +43,15 @@ def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration
                 EAR_THRESH = 0.25
                 print("Calibration Failed: Using Default Threshold = 0.25")
     else:
+        ear_values.append(ear)
+        if len(ear_values) > calibration_window:
+            recent_ears = ear_values[-calibration_window:]
+            new_thresh = np.mean(recent_ears) - 0.5 * np.std(recent_ears)
+            EAR_THRESH = max(min(new_thresh, 0.4), 0.15)
+
         # 눈 감은 상태 인지, 아닌지 판별
         if ear < EAR_THRESH:
+            frames_closed += 1
             # 눈을 막 감은 순간
             if not eyes_closed:
                 eyes_closed = True
@@ -63,5 +72,7 @@ def detect_eye_blink(facial_landmarks, w, h, EAR_THRESH, SLEEP_TIME, calibration
             # 상태 초기화
             eyes_closed = False
             blink_start = None
+            frames_closed = 0
 
-    return EAR_THRESH, blink_start, blink_count, eyes_closed, current_state, calibration_message
+    return EAR_THRESH, blink_start, blink_count, eyes_closed, current_state, calibration_message, frames_closed
+

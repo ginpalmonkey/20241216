@@ -33,8 +33,11 @@ def cal_blink_points(blinks_per_minute):
         points = 0
     else:
         points = blinks_per_minute - 20
+    score = 20 - points
 
-    return 20 - points
+    if score <= 0:
+        return 0
+    else: return score
 
 def totalscore(sleep_point, ht_point, blink_points):
     total = int(sleep_point) + int(ht_point) + int(blink_points)
